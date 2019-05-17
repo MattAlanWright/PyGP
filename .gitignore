@@ -1,0 +1,9 @@
+# MacOS artefacts
+.DS_Store
+
+# Jupyter notebook artefacts
+__pycache__/
+.ipynb_checkpoints/
+
+# Saved trained genetic programs
+*.gp
