@@ -405,3 +405,5 @@ def breederSelection(population_size,
 
         if display_fun != None:
             display_fun("Round " + str(r) + " - Error " + str(best_fitness))
+
+    return best_performer
