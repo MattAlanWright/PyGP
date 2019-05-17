@@ -10,9 +10,9 @@ def softmaxCrossEntropy(z, y):
 
 ## TODO:
 # - Probabilistic crossover
+# - Comment properly
 class Program(object):
 
-    # Definitions
     REGISTER_MODE              = 0
     INPUT_MODE                 = 1
     NUM_MODES                  = 2
@@ -132,7 +132,7 @@ class Program(object):
         # Extract instruction values
         mode, target_index, op_code, source_index = instruction
         
-        # Perform modulo if indexing into the smaller range
+        # Perform modulo in case we are indexing into the smaller range
         source_index %= self._source_mod_value[mode]
 
         # Switch on mode (register mode vs input mode)
@@ -176,7 +176,10 @@ class Program(object):
                     max_num_instructions     = self._max_num_instructions,
                     cost_function            = self._cost_function,
                     num_classes              = self._num_classes,
-                    initialize_instructions  = do_copy_instructions)
+                    initialize_instructions  = False)
+
+        if do_copy_instructions:
+            p.instructions = copy.deepcopy(self.instructions)
 
         return p
 
@@ -284,9 +287,6 @@ class Program(object):
             p = pickle.load(fp)
         return p
 
-def test(hello):
-    pass
-
 
 def tournamentSelection(population_size,
                         mutation_rate,
@@ -325,7 +325,7 @@ def tournamentSelection(population_size,
             best_performer = population[fitness_indices[0]]
 
             if best_fitness < halting_fitness:
-                display("Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
+                display_fun("Round " + str(r) + " - Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
                 break
 
         # Grab out the two top players as parents
@@ -380,7 +380,7 @@ def breederSelection(population_size,
             best_performer = population[fitness_indices[0]]
 
             if best_fitness < halting_fitness:
-                print("Achieved fitness of < " + str(halting_fitness))
+                display_fun("Round " + str(r) + " - Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
                 break
 
         # Remove num_gap_individuals
