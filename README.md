@@ -14,5 +14,5 @@ Four notebooks accompany the main class. These notebooks implement tournament se
 
 ## Training
 
-To train a program, just run any of the four notebooks that you're interested in. The results will be displayed in real time.
+To train a program, just run any of the four notebooks that you're interested in (this requires an installation of Jupyter). The results will be displayed in real time.
 
