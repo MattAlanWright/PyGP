@@ -5,8 +5,17 @@ import copy
 import pickle
 
 # Utitlities
-def softmaxCrossEntropy(z, y):
-    return logsumexp(z) - z[y]
+def softmaxCrossEntropy(z, label):
+    return logsumexp(z) - z[label]
+
+def sigmoid(z):
+    return 1.0 / (1.0 + np.exp(-z))
+
+def logisticCrossEntropy(z, label):
+    y = sigmoid(z)
+    t = float(label)
+    return -t*np.log(y) - (1.0 - t)*np.log(1.0 - y)
+    
 
 ## TODO:
 # - Probabilistic crossover
@@ -21,9 +30,11 @@ class Program(object):
     SUBTRACTION_OP             = 1
     MULTIPLICATION_OP          = 2
     DIVISION_OP                = 3
-    NUM_OP_CODES               = 4
+    GREATER_THAN_OP            = 4
+    LESS_THAN_OP               = 5
+    NUM_OP_CODES               = 6
 
-    OP_SYMBOLS                 = ['+', '-', '*', '/']
+    OP_SYMBOLS                 = ['+', '-', '*', '/', '>', '<']
 
     MODE_INDEX                 = 0
     TARGET_INDEX               = 1
@@ -35,13 +46,12 @@ class Program(object):
     NUM_INSTRUCTION_COMPONENTS = 4
 
     def __init__(self,
-                 max_initial_instructions = 8,
+                 max_initial_instructions = 32,
                  num_registers            = 8,
                  num_inputs               = 4,
                  mutation_rate            = 0.1,
-                 max_num_instructions     = 512,
+                 max_num_instructions     = 1024,
                  num_classes              = 3,
-                 cost_function            = softmaxCrossEntropy,
                  initialize_instructions  = True):
 
         # Initialize program parameters
@@ -51,7 +61,13 @@ class Program(object):
         self._mutation_rate            = mutation_rate
         self._max_num_instructions     = max_num_instructions
         self._num_classes              = num_classes
-        self._cost_function            = cost_function
+        
+        if self._num_classes == 2:
+            self._cost_function = logisticCrossEntropy
+        elif self._num_classes > 2:
+            self._cost_function = softmaxCrossEntropy
+        else:
+            print("Error: num_classes < 2")
 
         # Pre-check on maximum source value range
         self._max_source_range         = max(self._num_inputs, self._num_registers)
@@ -70,6 +86,9 @@ class Program(object):
             num_initial_instructions = randint(1, self._max_initial_instructions + 1)
             for i in range(num_initial_instructions):
                 self._instructions.append(self.createRandomInstruction())
+                
+        # Execution flag
+        self._skip_next_instruction = False
 
 
     @property
@@ -124,6 +143,9 @@ class Program(object):
         self.registers[:] = 0
 
         for instruction in self.instructions:
+            if self._skip_next_instruction:
+                self._skip_next_instruction = False
+                continue
             self.executeInstruction(instruction, IP)
 
 
@@ -157,6 +179,15 @@ class Program(object):
                 self._registers[target_index] = Program.SAFE_DIVISION_RESULT
             else:
                 self._registers[target_index] = self._registers[target_index] / source[source_index]
+                
+        elif op_code == Program.GREATER_THAN_OP:
+            # Only do next instruction if Target > Source
+            if self._registers[target_index] <= source[source_index]:
+                self._skip_next_instruction = True
+                
+        elif op_code == Program.LESS_THAN_OP:
+            if self._registers[target_index] >= source[source_index]:
+                self._skip_next_instruction = True
 
 
     def createRandomInstruction(self):
@@ -174,7 +205,6 @@ class Program(object):
                     num_inputs               = self._num_inputs,
                     mutation_rate            = self._mutation_rate,
                     max_num_instructions     = self._max_num_instructions,
-                    cost_function            = self._cost_function,
                     num_classes              = self._num_classes,
                     initialize_instructions  = False)
 
@@ -250,7 +280,11 @@ class Program(object):
 
         for i, x in enumerate(X):
             self.execute(x)
-            z = self.registers[0:self._num_classes]
+            z = None
+            if self._num_classes == 2:
+                z = self.registers[0]
+            else:
+                z = self.registers[0:self._num_classes]
             error += self._cost_function(z, y[i])
         
         return error
@@ -267,8 +301,14 @@ class Program(object):
 
         for i, x in enumerate(X):
             self.execute(x)
-            z = self.registers[0:self._num_classes]
-            prediction = np.argmax(z)
+            z          = None
+            prediction = None
+            if self._num_classes == 2:
+                z = self.registers[0]
+                prediction = np.round(sigmoid(z))
+            else:
+                z = self.registers[0:self._num_classes]
+                prediction = np.argmax(z)
             if prediction == y[i]:
                 num_correct += 1
 
@@ -294,11 +334,17 @@ def tournamentSelection(population_size,
                         max_num_generations,
                         X,
                         y,
+                        num_inputs,
+                        num_classes,
                         display_fun=None):
     
     population = []
     for i in range(population_size):
-        p = Program(mutation_rate=mutation_rate)
+        p = Program(
+            mutation_rate = mutation_rate,
+            num_inputs    = num_inputs,
+            num_classes   = num_classes
+        )
         population.append(p)
     
     best_fitness    = 1000000
@@ -351,11 +397,17 @@ def breederSelection(population_size,
                      gap_percent,
                      X,
                      y,
+                     num_inputs,
+                     num_classes,
                      display_fun=None):
     
     population = []
     for i in range(population_size):
-        p = Program(mutation_rate=mutation_rate)
+        p = Program(
+            mutation_rate = mutation_rate,
+            num_inputs    = num_inputs,
+            num_classes   = num_classes
+        )
         population.append(p)
     population = np.array(population)
     
