@@ -3,9 +3,9 @@ import csv
 
 def load_tic_tac_toe():
     
-    B = 0.0
-    O = 1.0
-    X = 2.0
+    B =  0.0
+    O = -1.0
+    X =  1.0
     
     NEGATIVE = 0.0
     POSITIVE = 1.0

@@ -14,7 +14,7 @@ def sigmoid(z):
 def logisticCrossEntropy(z, label):
     y = sigmoid(z)
     t = float(label)
-    return -t*np.log(y) - (1.0 - t)*np.log(1.0 - y)
+    return -1.0*t*np.log(y) - (1.0 - t)*np.log(1.0 - y)
     
 
 ## TODO:
@@ -30,9 +30,7 @@ class Program(object):
     SUBTRACTION_OP             = 1
     MULTIPLICATION_OP          = 2
     DIVISION_OP                = 3
-    GREATER_THAN_OP            = 4
-    LESS_THAN_OP               = 5
-    NUM_OP_CODES               = 6
+    NUM_OP_CODES               = 4
 
     OP_SYMBOLS                 = ['+', '-', '*', '/', '>', '<']
 
@@ -41,12 +39,12 @@ class Program(object):
     OP_CODE_INDEX              = 2
     SOURCE_INDEX               = 3
 
-    SAFE_DIVISION_RESULT       = 1
+    SAFE_DIVISION_RESULT       = 0.0
 
     NUM_INSTRUCTION_COMPONENTS = 4
 
     def __init__(self,
-                 max_initial_instructions = 32,
+                 max_initial_instructions = 64,
                  num_registers            = 8,
                  num_inputs               = 4,
                  mutation_rate            = 0.1,
@@ -119,7 +117,8 @@ class Program(object):
             source = 'R'
         else:
             source = 'IP'
-            source_index %= self._num_inputs
+
+        source_index %= self._source_mod_value[mode]
 
         instruction_string = 'R[' + \
                              str(target_index) + \
@@ -143,9 +142,6 @@ class Program(object):
         self.registers[:] = 0
 
         for instruction in self.instructions:
-            if self._skip_next_instruction:
-                self._skip_next_instruction = False
-                continue
             self.executeInstruction(instruction, IP)
 
 
@@ -179,15 +175,6 @@ class Program(object):
                 self._registers[target_index] = Program.SAFE_DIVISION_RESULT
             else:
                 self._registers[target_index] = self._registers[target_index] / source[source_index]
-                
-        elif op_code == Program.GREATER_THAN_OP:
-            # Only do next instruction if Target > Source
-            if self._registers[target_index] <= source[source_index]:
-                self._skip_next_instruction = True
-                
-        elif op_code == Program.LESS_THAN_OP:
-            if self._registers[target_index] >= source[source_index]:
-                self._skip_next_instruction = True
 
 
     def createRandomInstruction(self):
@@ -199,14 +186,14 @@ class Program(object):
         return [mode, target_index, op_code, source_index]
 
 
-    def copy(self, do_copy_instructions=False):
+    def copy(self, do_initialize_instructions=False, do_copy_instructions=False):
         p = Program(max_initial_instructions = self._max_initial_instructions,
                     num_registers            = self._num_registers,
                     num_inputs               = self._num_inputs,
                     mutation_rate            = self._mutation_rate,
                     max_num_instructions     = self._max_num_instructions,
                     num_classes              = self._num_classes,
-                    initialize_instructions  = False)
+                    initialize_instructions  = do_initialize_instructions)
 
         if do_copy_instructions:
             p.instructions = copy.deepcopy(self.instructions)
@@ -218,7 +205,19 @@ class Program(object):
 
         self_num_instructions  = len(self.instructions)
         other_num_instructions = len(other.instructions)
+        
+        c1 = None
+        c2 = None
+        c1_instructions = None
+        c2_instructions = None
 
+        if uniform(0.0, 1.0) > 0.9:
+            c1 = self.copy()
+            c2 = other.copy()
+            c1._instructions = copy.deepcopy(self._instructions)
+            c2._instructions = copy.deepcopy(other._instructions)
+            return c1, c2            
+            
         self_point1 = randint(0,               self_num_instructions)
         self_point2 = randint(self_point1 + 1, self_num_instructions + 1)
 
@@ -246,7 +245,7 @@ class Program(object):
 
         return c1, c2
 
-
+    '''
     def mutate(self):
         if uniform(0.0, 1.0) > self._mutation_rate:
             return
@@ -273,6 +272,34 @@ class Program(object):
         while new_val == self.instructions[instruction_index][component_index]:
             new_val = randint(0, upper_bound)
         self.instructions[instruction_index][component_index] = new_val
+    '''
+    
+    def mutate(self):
+        
+        for i in range(len(self.instructions)):
+            
+            if uniform(0.0, 1.0) > self._mutation_rate:
+                continue
+
+            # Get random instruction component
+            component_index = randint(0, Program.NUM_INSTRUCTION_COMPONENTS)
+
+            # Figure out which component is being modified
+            upper_bound = None
+            if component_index == Program.MODE_INDEX:
+                upper_bound = Program.NUM_MODES
+            elif component_index == Program.TARGET_INDEX:
+                upper_bound = self._num_registers
+            elif component_index == Program.OP_CODE_INDEX:
+                upper_bound = Program.NUM_OP_CODES
+            else:            
+                upper_bound = self._max_source_range
+
+            # Mutate component
+            new_val = randint(0, upper_bound)
+            while new_val == self.instructions[i][component_index]:
+                new_val = randint(0, upper_bound)
+            self.instructions[i][component_index] = new_val
 
 
     def evaluate(self, X, y):
@@ -283,9 +310,10 @@ class Program(object):
             z = None
             if self._num_classes == 2:
                 z = self.registers[0]
+                error += logisticCrossEntropy(z, y[i])
             else:
                 z = self.registers[0:self._num_classes]
-            error += self._cost_function(z, y[i])
+                error += softmaxCrossEntropy(z, y[i])
         
         return error
 
@@ -329,22 +357,16 @@ class Program(object):
 
 
 def tournamentSelection(population_size,
-                        mutation_rate,
+                        template_program,
                         halting_fitness,
                         max_num_generations,
                         X,
                         y,
-                        num_inputs,
-                        num_classes,
                         display_fun=None):
     
     population = []
     for i in range(population_size):
-        p = Program(
-            mutation_rate = mutation_rate,
-            num_inputs    = num_inputs,
-            num_classes   = num_classes
-        )
+        p = template_program.copy(do_initialize_instructions=True)
         population.append(p)
     
     best_fitness    = 1000000
@@ -391,23 +413,17 @@ def tournamentSelection(population_size,
 
 
 def breederSelection(population_size,
-                     mutation_rate,
+                     template_program,
                      halting_fitness,
                      max_num_generations,
                      gap_percent,
                      X,
                      y,
-                     num_inputs,
-                     num_classes,
                      display_fun=None):
     
     population = []
     for i in range(population_size):
-        p = Program(
-            mutation_rate = mutation_rate,
-            num_inputs    = num_inputs,
-            num_classes   = num_classes
-        )
+        p = template_program.copy(do_initialize_instructions=True)
         population.append(p)
     population = np.array(population)
     
