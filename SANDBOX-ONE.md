@@ -163,11 +163,11 @@ For the iris dataset, these results show that a lower mutation rate may result i
 
 The plots below show the comparison of convergence behaviour among the best-performing individuals from each three runs using a particular gap percent for each run of evolution.
 
-<img src="iris-breeder.png" width="500px" />
+<img src="iris-breeder.png" width="400px" />
 
-<img src="ttt-breeder.png" width="500px" />
+<img src="ttt-breeder.png" width="400px" />
 
-<img src="wisc-breeder.png" width="500px" />
+<img src="wisc-breeder.png" width="400px" />
 
 For breeder-style evolution, the hypothesis appears to hold that the higher gap percent (ie. killing off and replacing a majority of the population rather than the minority) seems to encourage quicker rates of convergence.
 
