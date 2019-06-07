@@ -4,23 +4,51 @@ from scipy.special import logsumexp
 import copy
 import pickle
 
-# Utitlities
+
 def softmaxCrossEntropy(z, label):
+    '''Multiclass error function.
+    Softmax cross entropy is a combination of the softmax
+    function, used to smooth a multiclass prediction vector
+    into a valid probability distribution, and the generalized
+    formula for cross-entropy entropy between the predicted and
+    real distribution.
+
+    Params:
+    z:     Prediction vector (list of floats)
+    label: Integer index of the true label
+    '''
     return logsumexp(z) - z[label]
 
 def sigmoid(z):
+    '''Logistic function.
+
+    Params:
+    z: Single floating value input to the logistic function
+    '''
     return 1.0 / (1.0 + np.exp(-z))
 
 def logisticCrossEntropy(z, label):
+    '''Binary classification error function.
+    Logistic cross entropy is a combination of the logistic
+    function, used to compress a binary class prediction value
+    into a valid probability, and the cross-entropy error function
+    for the binary classification case.
+
+    Params:
+    z:     Prediction value (single float)
+    label: Integer value of the true label (0 or 1)
+    '''
     y = sigmoid(z)
     t = float(label)
     return -1.0*t*np.log(y) - (1.0 - t)*np.log(1.0 - y)
-    
 
-## TODO:
-# - Probabilistic crossover
-# - Comment properly
+
+
 class Program(object):
+    '''Class implementing a canonical genetic program as described in
+    the first CSCI 6506 sandbox, ie. consisting of ONLY the +, -, * and /
+    operators and used ofr binary or multiclass classification.
+    '''
 
     REGISTER_MODE              = 0
     INPUT_MODE                 = 1
@@ -32,7 +60,7 @@ class Program(object):
     DIVISION_OP                = 3
     NUM_OP_CODES               = 4
 
-    OP_SYMBOLS                 = ['+', '-', '*', '/', '>', '<']
+    OP_SYMBOLS                 = ['+', '-', '*', '/']
 
     MODE_INDEX                 = 0
     TARGET_INDEX               = 1
@@ -59,13 +87,7 @@ class Program(object):
         self._mutation_rate            = mutation_rate
         self._max_num_instructions     = max_num_instructions
         self._num_classes              = num_classes
-        
-        if self._num_classes == 2:
-            self._cost_function = logisticCrossEntropy
-        elif self._num_classes > 2:
-            self._cost_function = softmaxCrossEntropy
-        else:
-            print("Error: num_classes < 2")
+
 
         # Pre-check on maximum source value range
         self._max_source_range         = max(self._num_inputs, self._num_registers)
@@ -78,15 +100,15 @@ class Program(object):
         # Allocate space for registers
         self._registers                = np.zeros(self._num_registers)
 
-        # Initialize random instructions
+        # Initialize random instructions. This is technically optional to speed
+        # up re-production: when a child or children are produced, they will receive
+        # (modified) copies of their parents' instructions and so don't need to
+        # waste cycles initializing their own.
         self._instructions = []
-        if initialize_instructions == True:
-            num_initial_instructions = randint(1, self._max_initial_instructions + 1)
-            for i in range(num_initial_instructions):
+        if initialize_instructions:
+            n = randint(self._num_registers, self._max_initial_instructions + 1)
+            for i in range(n):
                 self._instructions.append(self.createRandomInstruction())
-                
-        # Execution flag
-        self._skip_next_instruction = False
 
 
     @property
@@ -105,6 +127,7 @@ class Program(object):
 
 
     def printInstructions(self):
+        '''Print out instructions in a readable format.'''
         for instruction in self.instructions:
             self.printInstruction(instruction)
 
@@ -137,8 +160,11 @@ class Program(object):
 
 
     def execute(self, IP):
+        '''Execute the program's instructions on some examplar,
+        provided as input (IP) to this function.
+        '''
 
-        # Reset (zero out) registers
+        # Reset registers before performing computation
         self.registers[:] = 0
 
         for instruction in self.instructions:
@@ -149,7 +175,7 @@ class Program(object):
 
         # Extract instruction values
         mode, target_index, op_code, source_index = instruction
-        
+
         # Perform modulo in case we are indexing into the smaller range
         source_index %= self._source_mod_value[mode]
 
@@ -158,7 +184,7 @@ class Program(object):
         if mode == Program.REGISTER_MODE:
             source = self._registers
         else:
-            source = IP            
+            source = IP
 
         # Switch on operation and execute
         if op_code == Program.ADDITION_OP:
@@ -187,6 +213,16 @@ class Program(object):
 
 
     def copy(self, do_initialize_instructions=False, do_copy_instructions=False):
+        '''Copy a program instance. Used in crossover and for creating populations.
+
+        Params:
+        do_initialize_instructions: Boolean determining whether the child initializes
+        its own set of instructions. This is useful when a single instance of a Program
+        is to be used as a template for many instances, ie. in population creation.
+
+        do_copy_instructions: Boolean determining whether the child should receive
+        a copy of its parent's instructions. Useful for crossover.
+        '''
         p = Program(max_initial_instructions = self._max_initial_instructions,
                     num_registers            = self._num_registers,
                     num_inputs               = self._num_inputs,
@@ -202,22 +238,25 @@ class Program(object):
 
 
     def crossover(self, other):
+        '''Canonical probabilistic crossover.'''
 
         self_num_instructions  = len(self.instructions)
         other_num_instructions = len(other.instructions)
-        
+
         c1 = None
         c2 = None
         c1_instructions = None
         c2_instructions = None
 
+        # With a probability of 10%, possibly avoid crossover and give
+        # children exact copies of the parents' instructions.
         if uniform(0.0, 1.0) > 0.9:
             c1 = self.copy()
             c2 = other.copy()
             c1._instructions = copy.deepcopy(self._instructions)
             c2._instructions = copy.deepcopy(other._instructions)
-            return c1, c2            
-            
+            return c1, c2
+
         self_point1 = randint(0,               self_num_instructions)
         self_point2 = randint(self_point1 + 1, self_num_instructions + 1)
 
@@ -264,7 +303,7 @@ class Program(object):
             upper_bound = self._num_registers
         elif component_index == Program.OP_CODE_INDEX:
             upper_bound = Program.NUM_OP_CODES
-        else:            
+        else:
             upper_bound = self._max_source_range
 
         # Mutate component
@@ -273,18 +312,26 @@ class Program(object):
             new_val = randint(0, upper_bound)
         self.instructions[instruction_index][component_index] = new_val
     '''
-    
+
     def mutate(self):
-        
+        #Canonical probabilistic mutation.
+
+        num_mutated = 0
+
         for i in range(len(self.instructions)):
-            
+
+            # For each instruction, flip a coin weighted at the _mutation_rate.
+            # If it comes up "unlikely heads", then mutate the instruction.
             if uniform(0.0, 1.0) > self._mutation_rate:
                 continue
+
+            num_mutated += 1
 
             # Get random instruction component
             component_index = randint(0, Program.NUM_INSTRUCTION_COMPONENTS)
 
-            # Figure out which component is being modified
+            # Figure out which component is being modified and set the upper
+            # bound on the RNG.
             upper_bound = None
             if component_index == Program.MODE_INDEX:
                 upper_bound = Program.NUM_MODES
@@ -292,7 +339,7 @@ class Program(object):
                 upper_bound = self._num_registers
             elif component_index == Program.OP_CODE_INDEX:
                 upper_bound = Program.NUM_OP_CODES
-            else:            
+            else:
                 upper_bound = self._max_source_range
 
             # Mutate component
@@ -301,8 +348,17 @@ class Program(object):
                 new_val = randint(0, upper_bound)
             self.instructions[i][component_index] = new_val
 
+        return num_mutated
 
     def evaluate(self, X, y):
+        '''Evaluate the current program on a labelled dataset. This function
+        returns a *unitless* error value, ie. this value is NOT a percent or
+        meaningful value. Rather: lower good, higher bad.
+
+        Params:
+        X: List of exemplars where each examplar is a list of floating point values.
+        y: List of labels where each label is an integer that represents the class.
+        '''
         error = 0
 
         for i, x in enumerate(X):
@@ -314,15 +370,19 @@ class Program(object):
             else:
                 z = self.registers[0:self._num_classes]
                 error += softmaxCrossEntropy(z, y[i])
-        
+
         return error
 
 
     def accuracy(self, X, y):
+        '''Evaluate the accuracy of the program on a labelled dataset.
+        This function returns the fraction of examplars correctly labelled
+        by the program.
 
-        if X.shape[0] != len(y):
-            print("Program::accuracy - Error - Number of samples and number of labels mismatched.")
-            return -1.0
+        Params:
+        X: List of exemplars where each examplar is a list of floating point values.
+        y: List of labels where each label is an integer that represents the class.
+        '''
 
         num_correct = 0
         num_samples = len(y)
@@ -363,12 +423,19 @@ def tournamentSelection(population_size,
                         X,
                         y,
                         display_fun=None):
-    
+
+    history = {
+        'error': []
+    }
+
+    if display_fun == None:
+        display_fun = print
+
     population = []
     for i in range(population_size):
         p = template_program.copy(do_initialize_instructions=True)
         population.append(p)
-    
+
     best_fitness    = 1000000
     best_performer  = None
 
@@ -387,7 +454,7 @@ def tournamentSelection(population_size,
         # Rank the competitors
         fitness_indices = np.argsort(fitness)
 
-        # Record best performer
+        # Record best fitness and best performer
         if fitness[fitness_indices[0]] < best_fitness:
             best_fitness   = fitness[fitness_indices[0]]
             best_performer = population[fitness_indices[0]]
@@ -395,6 +462,8 @@ def tournamentSelection(population_size,
             if best_fitness < halting_fitness:
                 display_fun("Round " + str(r) + " - Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
                 break
+
+        history['error'].append(best_fitness)
 
         # Grab out the two top players as parents
         p1, p2 = competitors[fitness_indices[0]], competitors[fitness_indices[1]]
@@ -408,8 +477,8 @@ def tournamentSelection(population_size,
 
         if display_fun != None:
             display_fun("Round " + str(r) + " - Error " + str(best_fitness))
-        
-    return best_performer
+
+    return best_performer, history
 
 
 def breederSelection(population_size,
@@ -420,13 +489,20 @@ def breederSelection(population_size,
                      X,
                      y,
                      display_fun=None):
-    
+
+    history = {
+        'error': []
+    }
+
+    if display_fun == None:
+        display_fun = print
+
     population = []
     for i in range(population_size):
         p = template_program.copy(do_initialize_instructions=True)
         population.append(p)
     population = np.array(population)
-    
+
     best_fitness        = 1000000
     best_performer      = None
     num_gap_individuals = round(gap_percent * len(population))
@@ -442,7 +518,8 @@ def breederSelection(population_size,
         # Rank the competitors
         fitness_indices = np.argsort(fitness)
 
-        # Record best performer
+        # Record best fitness and best performer
+        history['error'].append(fitness[fitness_indices[0]])
         if fitness[fitness_indices[0]] < best_fitness:
             best_fitness   = fitness[fitness_indices[0]]
             best_performer = population[fitness_indices[0]]
@@ -474,4 +551,4 @@ def breederSelection(population_size,
         if display_fun != None:
             display_fun("Round " + str(r) + " - Error " + str(best_fitness))
 
-    return best_performer
+    return best_performer, history
