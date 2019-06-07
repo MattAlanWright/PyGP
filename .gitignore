@@ -8,4 +8,6 @@ __pycache__/
 # Saved trained genetic programs
 *.gp
 
+assignments/
+
 *.pdf
