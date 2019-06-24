@@ -1,8 +1,10 @@
 import numpy as np
 from numpy.random import randint, uniform
-from scipy.special import logsumexp
+from scipy.special import logsumexp, softmax
 import copy
 import pickle
+
+from SamplingPolicies import *
 
 
 def softmaxCrossEntropy(z, label):
@@ -41,7 +43,6 @@ def logisticCrossEntropy(z, label):
     y = sigmoid(z)
     t = float(label)
     return -1.0*t*np.log(y) - (1.0 - t)*np.log(1.0 - y)
-
 
 
 class Program(object):
@@ -157,6 +158,19 @@ class Program(object):
                              ']'
 
         print(instruction_string)
+
+
+    def classify(self, IP):
+        self.execute(IP)
+        
+        if self._num_classes == 2:
+            if self._registers[0] < 0:
+                return 0
+            else:
+                return 1
+                
+        else:
+            return np.argmax(self.registers[:self._num_classes])
 
 
     def execute(self, IP):
@@ -284,38 +298,10 @@ class Program(object):
 
         return c1, c2
 
-    '''
-    def mutate(self):
-        if uniform(0.0, 1.0) > self._mutation_rate:
-            return
-
-        # Get random instruction
-        instruction_index = randint(0, len(self.instructions))
-
-        # Get random instruction component
-        component_index = randint(0, Program.NUM_INSTRUCTION_COMPONENTS)
-
-        # Figure out which component is being modified
-        upper_bound = None
-        if component_index == Program.MODE_INDEX:
-            upper_bound = Program.NUM_MODES
-        elif component_index == Program.TARGET_INDEX:
-            upper_bound = self._num_registers
-        elif component_index == Program.OP_CODE_INDEX:
-            upper_bound = Program.NUM_OP_CODES
-        else:
-            upper_bound = self._max_source_range
-
-        # Mutate component
-        new_val = randint(0, upper_bound)
-        while new_val == self.instructions[instruction_index][component_index]:
-            new_val = randint(0, upper_bound)
-        self.instructions[instruction_index][component_index] = new_val
-    '''
 
     def mutate(self):
+        
         #Canonical probabilistic mutation.
-
         num_mutated = 0
 
         for i in range(len(self.instructions)):
@@ -372,6 +358,30 @@ class Program(object):
                 error += softmaxCrossEntropy(z, y[i])
 
         return error
+    
+
+    def pointsEvaluate(self, points):
+        '''Evaluate the current program on a labelled dataset. This function
+        returns a *unitless* error value, ie. this value is NOT a percent or
+        meaningful value. Rather: lower good, higher bad.
+
+        Params:
+        X: List of exemplars where each examplar is a list of floating point values.
+        y: List of labels where each label is an integer that represents the class.
+        '''
+        error = 0
+
+        for point in points:
+            self.execute(point.X)
+            z = None
+            if self._num_classes == 2:
+                z = self.registers[0]
+                error += logisticCrossEntropy(z, point.y)
+            else:
+                z = self.registers[0:self._num_classes]
+                error += softmaxCrossEntropy(z, point.y)
+
+        return error    
 
 
     def accuracy(self, X, y):
@@ -393,7 +403,7 @@ class Program(object):
             prediction = None
             if self._num_classes == 2:
                 z = self.registers[0]
-                prediction = np.round(sigmoid(z))
+                prediction = 0 if z < 0 else 1
             else:
                 z = self.registers[0:self._num_classes]
                 prediction = np.argmax(z)
@@ -401,6 +411,79 @@ class Program(object):
                 num_correct += 1
 
         return (num_correct/num_samples)
+    
+    
+    def pointsAccuracy(self, points):
+        '''Evaluate the accuracy of the program on a labelled dataset.
+        This function returns the fraction of examplars correctly labelled
+        by the program.
+
+        Params:
+        X: List of exemplars where each examplar is a list of floating point values.
+        y: List of labels where each label is an integer that represents the class.
+        '''
+
+        num_correct = 0
+        num_samples = len(points)
+
+        for point in points:
+            self.execute(point.X)
+            z          = None
+            prediction = None
+            if self._num_classes == 2:
+                z = self.registers[0]
+                prediction = 0 if z < 0 else 1
+            else:
+                z = self.registers[0:self._num_classes]
+                prediction = np.argmax(z)
+            if prediction == point.y:
+                num_correct += 1
+
+        return (num_correct/num_samples)
+
+    
+    def detectionRate(self, X, y):
+        
+        detection_rate = 0.0
+        
+        true_positives  = np.zeros(self._num_classes)
+        false_negatives = np.zeros(self._num_classes)
+        
+        for i, x in enumerate(X):
+            prediction = self.classify(x)
+            if prediction == y[i]:
+                true_positives[y[i]] += 1
+            else:
+                false_negatives[y[i]] += 1
+                
+        for i in range(self._num_classes):
+            detection_rate += true_positives[i] / (true_positives[i] + false_negatives[i])
+            
+        detection_rate /= self._num_classes
+        
+        return detection_rate
+    
+    
+    def pointsDetectionRate(self, points):
+        
+        detection_rate = 0.0
+        
+        true_positives  = np.zeros(self._num_classes)
+        false_negatives = np.zeros(self._num_classes)
+        
+        for point in points:
+            prediction = self.classify(point.X)
+            if prediction == point.y:
+                true_positives[point.y] += 1
+            else:
+                false_negatives[point.y] += 1
+                
+        for i in range(self._num_classes):
+            detection_rate += true_positives[i] / (true_positives[i] + false_negatives[i])
+            
+        detection_rate /= self._num_classes
+        
+        return detection_rate
 
 
     def save(self, file_name):
@@ -414,78 +497,14 @@ class Program(object):
         with open (file_name, 'rb') as fp:
             p = pickle.load(fp)
         return p
+    
 
-
-def tournamentSelection(population_size,
-                        template_program,
-                        halting_fitness,
-                        max_num_generations,
-                        X,
-                        y,
-                        display_fun=None):
-
-    history = {
-        'error': []
-    }
-
-    if display_fun == None:
-        display_fun = print
-
-    population = []
-    for i in range(population_size):
-        p = template_program.copy(do_initialize_instructions=True)
-        population.append(p)
-
-    best_fitness    = 1000000
-    best_performer  = None
-
-    for r in range(max_num_generations):
-
-        # Get four random competitors
-        competitor_indices = np.random.choice(range(len(population)), size=4, replace=False)
-        competitors = [population[i] for i in competitor_indices]
-
-        # Pit the competitors against each other
-        # (evaluate their fitness)
-        fitness = []
-        for competitor in competitors:
-            fitness.append(competitor.evaluate(X, y))
-
-        # Rank the competitors
-        fitness_indices = np.argsort(fitness)
-
-        # Record best fitness and best performer
-        if fitness[fitness_indices[0]] < best_fitness:
-            best_fitness   = fitness[fitness_indices[0]]
-            best_performer = population[fitness_indices[0]]
-
-            if best_fitness < halting_fitness:
-                display_fun("Round " + str(r) + " - Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
-                break
-
-        history['error'].append(best_fitness)
-
-        # Grab out the two top players as parents
-        p1, p2 = competitors[fitness_indices[0]], competitors[fitness_indices[1]]
-
-        c1, c2 = p1.crossover(p2)
-        c1.mutate()
-        c2.mutate()
-
-        population[competitor_indices[fitness_indices[2]]] = c1
-        population[competitor_indices[fitness_indices[3]]] = c2
-
-        if display_fun != None:
-            display_fun("Round " + str(r) + " - Error " + str(best_fitness))
-
-    return best_performer, history
-
-
-def breederSelection(population_size,
+def breederSelection(p_size,
+                     p_gap,
+                     tau,
                      template_program,
-                     halting_fitness,
+                     sampling_policy_class,
                      max_num_generations,
-                     gap_percent,
                      X,
                      y,
                      display_fun=None):
@@ -496,23 +515,29 @@ def breederSelection(population_size,
 
     if display_fun == None:
         display_fun = print
+        
+    # Instantiate sampling policy
+    sampling_policy = sampling_policy_class(X, y)        
 
+    # Create program population    
     population = []
-    for i in range(population_size):
+    for i in range(p_size):
         p = template_program.copy(do_initialize_instructions=True)
         population.append(p)
     population = np.array(population)
 
     best_fitness        = 1000000
-    best_performer      = None
-    num_gap_individuals = round(gap_percent * len(population))
+    best_performer      = None        
 
     for r in range(max_num_generations):
+        
+        # Generate points
+        points = sampling_policy.sample(tau)
 
         # Pit the competitors against each other (evaluate their fitness)
         fitness = []
         for p in population:
-            fitness.append(p.evaluate(X, y))
+            fitness.append(p.pointsEvaluate(points))
         fitness = np.array(fitness)
 
         # Rank the competitors
@@ -524,15 +549,11 @@ def breederSelection(population_size,
             best_fitness   = fitness[fitness_indices[0]]
             best_performer = population[fitness_indices[0]]
 
-            if best_fitness < halting_fitness:
-                display_fun("Round " + str(r) + " - Achieved fitness of " + str(best_fitness) + " < " + str(halting_fitness))
-                break
-
         # Remove num_gap_individuals
-        population = population[fitness_indices[0:-num_gap_individuals]]
+        population = population[fitness_indices[0:-p_gap]]
 
         children = []
-        while len(children) < num_gap_individuals:
+        while len(children) < p_gap:
 
             # Get two random individual
             parent_indices = np.random.choice(range(len(population)), size=2, replace=False)
@@ -550,5 +571,90 @@ def breederSelection(population_size,
 
         if display_fun != None:
             display_fun("Round " + str(r) + " - Error " + str(best_fitness))
+
+    return best_performer, history    
+
+
+def fitnessSharingBreederSelection(p_size,
+                                   p_gap,
+                                   tau,
+                                   template_program,
+                                   sampling_policy_class,
+                                   max_num_generations,
+                                   X,
+                                   y,
+                                   display_fun=None):
+
+    history = {
+        'fitness': []
+    }
+
+    if display_fun == None:
+        display_fun = print
+        
+    # Instantiate sampling policy
+    sampling_policy = sampling_policy_class(X, y)
+
+    # Create program population
+    population = []
+    for i in range(p_size):
+        p = template_program.copy(do_initialize_instructions=True)
+        population.append(p)
+    population = np.array(population)
+    
+    # Prepare fitness matrix
+    G = np.zeros((p_size, tau))
+
+    best_accuracy       = 0
+    best_fitness        = 0
+    best_performer      = None
+
+    for g in range(max_num_generations):
+        
+        # Generate points
+        points = sampling_policy.sample(tau)
+
+        # Calculate the fitness matrix for each host on each point
+        for i, program in enumerate(population):
+            for k, point in enumerate(points):
+                G[i][k] = 1 if program.classify(point.X) == point.y else 0
+                
+                
+        # Calculate denominators for fitness formula
+        denoms  = np.sum(G, axis=0) + 1
+        G       = G / denoms
+        fitness = np.sum(G, axis=1)
+        
+        # Rank the competitors
+        fitness_indices = np.argsort(fitness)[::-1]
+
+        # Record best fitness and best performer
+        history['fitness'].append(fitness[fitness_indices[0]])
+        if fitness[fitness_indices[0]] > best_fitness:
+            best_fitness   = fitness[fitness_indices[0]]
+            best_performer = population[fitness_indices[0]]
+
+        # Remove num_gap_individuals
+        population = population[fitness_indices[0:-p_gap]]
+
+        children = []
+        while len(children) < p_gap:
+
+            # Get two random individuals
+            parent_indices = np.random.choice(range(len(population)), size=2, replace=False)
+            p1, p2 = population[parent_indices]
+
+            c1, c2 = p1.crossover(p2)
+            c1.mutate()
+            c2.mutate()
+
+            children.append(c1)
+            children.append(c2)
+
+        children = np.array(children)
+        population = np.concatenate((population, children))
+
+        if display_fun != None:
+            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness) + " - Accuracy " + str(acc))
 
     return best_performer, history
