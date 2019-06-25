@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.random import randint, uniform
 from scipy.special import logsumexp, softmax
+from sklearn.preprocessing import MinMaxScaler
 import copy
 import pickle
 
@@ -510,6 +511,96 @@ def breederSelection(p_size,
                      display_fun=None):
 
     history = {
+        'fitness'       : [],
+        'fitness_union' : [],
+        'best_fitness'  : []
+    }
+
+    if display_fun == None:
+        display_fun = print
+        
+    # Instantiate sampling policy
+    sampling_policy = sampling_policy_class(X, y)
+
+    # Create program population
+    population = []
+    for i in range(p_size):
+        p = template_program.copy(do_initialize_instructions=True)
+        population.append(p)
+    population = np.array(population)
+    
+    # Prepare fitness matrix
+    G = np.zeros((p_size, tau))
+
+    best_fitness        = 0
+    best_performer      = None
+
+    for g in range(max_num_generations):
+        
+        # Generate points
+        points = sampling_policy.sample(tau)
+
+        # Calculate the fitness matrix for each host on each point
+        for i, program in enumerate(population):
+            for k, point in enumerate(points):
+                G[i][k] = 1 if program.classify(point.X) == point.y else 0
+                
+                
+        # Calculate fitness
+        fitness = np.sum(G, axis=1)       
+        
+        # Rank the competitors
+        fitness_indices = np.argsort(fitness)[::-1]
+
+        # Record best fitness and best performer
+        history['fitness'].append(fitness[fitness_indices[0]])      
+        
+        if fitness[fitness_indices[0]] > best_fitness:
+            best_fitness   = fitness[fitness_indices[0]]
+            best_performer = population[fitness_indices[0]]
+            
+        history['best_fitness'].append(best_fitness)
+
+        fitness_union = np.sum(fitness[fitness_indices[:-p_gap]])
+        history['fitness_union'].append(fitness_union)
+            
+        # Remove num_gap_individuals
+        population = population[fitness_indices[0:-p_gap]]
+
+        children = []
+        while len(children) < p_gap:
+
+            # Get two random individuals
+            parent_indices = np.random.choice(range(len(population)), size=2, replace=False)
+            p1, p2 = population[parent_indices]
+
+            c1, c2 = p1.crossover(p2)
+            c1.mutate()
+            c2.mutate()
+
+            children.append(c1)
+            children.append(c2)
+
+        children = np.array(children)
+        population = np.concatenate((population, children))
+
+        if display_fun != None:
+            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness))
+
+    return best_performer, population, history
+
+
+def errorMinBreederSelection(p_size,
+                             p_gap,
+                             tau,
+                             template_program,
+                             sampling_policy_class,
+                             max_num_generations,
+                             X,
+                             y,
+                             display_fun=None):
+
+    history = {
         'error': []
     }
 
@@ -572,7 +663,7 @@ def breederSelection(p_size,
         if display_fun != None:
             display_fun("Round " + str(r) + " - Error " + str(best_fitness))
 
-    return best_performer, history    
+    return best_performer, history
 
 
 def fitnessSharingBreederSelection(p_size,
@@ -586,7 +677,9 @@ def fitnessSharingBreederSelection(p_size,
                                    display_fun=None):
 
     history = {
-        'fitness': []
+        'fitness'      : [],
+        'fitness_union': [],
+        'best_fitness' : []
     }
 
     if display_fun == None:
@@ -605,7 +698,6 @@ def fitnessSharingBreederSelection(p_size,
     # Prepare fitness matrix
     G = np.zeros((p_size, tau))
 
-    best_accuracy       = 0
     best_fitness        = 0
     best_performer      = None
 
@@ -619,20 +711,25 @@ def fitnessSharingBreederSelection(p_size,
             for k, point in enumerate(points):
                 G[i][k] = 1 if program.classify(point.X) == point.y else 0
                 
-                
         # Calculate denominators for fitness formula
         denoms  = np.sum(G, axis=0) + 1
         G       = G / denoms
-        fitness = np.sum(G, axis=1)
+        fitness = np.sum(G, axis=1)        
         
         # Rank the competitors
         fitness_indices = np.argsort(fitness)[::-1]
-
+        
         # Record best fitness and best performer
         history['fitness'].append(fitness[fitness_indices[0]])
+        
         if fitness[fitness_indices[0]] > best_fitness:
             best_fitness   = fitness[fitness_indices[0]]
             best_performer = population[fitness_indices[0]]
+            
+        history['best_fitness'].append(best_fitness)
+        
+        fitness_union = np.sum(fitness[fitness_indices[:-p_gap]])
+        history['fitness_union'].append(fitness_union)
 
         # Remove num_gap_individuals
         population = population[fitness_indices[0:-p_gap]]
@@ -655,6 +752,6 @@ def fitnessSharingBreederSelection(p_size,
         population = np.concatenate((population, children))
 
         if display_fun != None:
-            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness) + " - Accuracy " + str(acc))
+            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness))
 
-    return best_performer, history
+    return best_performer, population, history
