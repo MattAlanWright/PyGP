@@ -45,4 +45,4 @@ def load_thyroid():
     test_X = np.array(test_X)
     test_y = np.array(test_y)
     
-    return train_X, train_y, test_X, test_y
+    return train_X, train_y, test_X, test_y, 21, 3

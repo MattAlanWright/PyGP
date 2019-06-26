@@ -458,7 +458,10 @@ class Program(object):
                 false_negatives[y[i]] += 1
                 
         for i in range(self._num_classes):
-            detection_rate += true_positives[i] / (true_positives[i] + false_negatives[i])
+            if true_positives[i] == 0:
+                detection_rate += 0
+            else:
+                detection_rate += true_positives[i] / (true_positives[i] + false_negatives[i])
             
         detection_rate /= self._num_classes
         
@@ -479,12 +482,15 @@ class Program(object):
             else:
                 false_negatives[point.y] += 1
                 
+        detection_rates = np.zeros(self._num_classes)
+                
         for i in range(self._num_classes):
-            detection_rate += true_positives[i] / (true_positives[i] + false_negatives[i])
-            
-        detection_rate /= self._num_classes
+            if true_positives[i] == 0:
+                detection_rates[i] = 0
+            else:
+                detection_rates[i] = true_positives[i] / (true_positives[i] + false_negatives[i])
         
-        return detection_rate
+        return detection_rates.mean()
 
 
     def save(self, file_name):
@@ -511,9 +517,8 @@ def breederSelection(p_size,
                      display_fun=None):
 
     history = {
-        'fitness'       : [],
-        'fitness_union' : [],
-        'best_fitness'  : []
+        'accuracy'         : [],
+        'recall'           : []
     }
 
     if display_fun == None:
@@ -547,22 +552,16 @@ def breederSelection(p_size,
                 
                 
         # Calculate fitness
-        fitness = np.sum(G, axis=1)       
-        
+        fitness = np.sum(G, axis=1)
+
         # Rank the competitors
         fitness_indices = np.argsort(fitness)[::-1]
 
-        # Record best fitness and best performer
-        history['fitness'].append(fitness[fitness_indices[0]])      
+        accuracy = population[fitness_indices[0]].pointsAccuracy(points)
+        recall   = population[fitness_indices[0]].pointsDetectionRate(points)
         
-        if fitness[fitness_indices[0]] > best_fitness:
-            best_fitness   = fitness[fitness_indices[0]]
-            best_performer = population[fitness_indices[0]]
-            
-        history['best_fitness'].append(best_fitness)
-
-        fitness_union = np.sum(fitness[fitness_indices[:-p_gap]])
-        history['fitness_union'].append(fitness_union)
+        history['accuracy'].append(accuracy)
+        history['recall'].append(recall)
             
         # Remove num_gap_individuals
         population = population[fitness_indices[0:-p_gap]]
@@ -585,9 +584,9 @@ def breederSelection(p_size,
         population = np.concatenate((population, children))
 
         if display_fun != None:
-            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness))
+            display_fun("Round " + str(g) + " - Accuracy: " + str(accuracy) + " Recall: " + str(recall))
 
-    return best_performer, population, history
+    return population, history
 
 
 def errorMinBreederSelection(p_size,
@@ -661,7 +660,7 @@ def errorMinBreederSelection(p_size,
         population = np.concatenate((population, children))
 
         if display_fun != None:
-            display_fun("Round " + str(r) + " - Error " + str(best_fitness))
+            display_fun("Round " + str(r) + " - Fitness " + str(best_fitness))
 
     return best_performer, history
 
@@ -677,9 +676,8 @@ def fitnessSharingBreederSelection(p_size,
                                    display_fun=None):
 
     history = {
-        'fitness'      : [],
-        'fitness_union': [],
-        'best_fitness' : []
+        'accuracy'         : [],
+        'recall'           : []
     }
 
     if display_fun == None:
@@ -698,9 +696,6 @@ def fitnessSharingBreederSelection(p_size,
     # Prepare fitness matrix
     G = np.zeros((p_size, tau))
 
-    best_fitness        = 0
-    best_performer      = None
-
     for g in range(max_num_generations):
         
         # Generate points
@@ -718,19 +713,13 @@ def fitnessSharingBreederSelection(p_size,
         
         # Rank the competitors
         fitness_indices = np.argsort(fitness)[::-1]
-        
-        # Record best fitness and best performer
-        history['fitness'].append(fitness[fitness_indices[0]])
-        
-        if fitness[fitness_indices[0]] > best_fitness:
-            best_fitness   = fitness[fitness_indices[0]]
-            best_performer = population[fitness_indices[0]]
-            
-        history['best_fitness'].append(best_fitness)
-        
-        fitness_union = np.sum(fitness[fitness_indices[:-p_gap]])
-        history['fitness_union'].append(fitness_union)
 
+        accuracy = population[fitness_indices[0]].pointsAccuracy(points)
+        recall   = population[fitness_indices[0]].pointsDetectionRate(points)
+        
+        history['accuracy'].append(accuracy)
+        history['recall'].append(recall)
+        
         # Remove num_gap_individuals
         population = population[fitness_indices[0:-p_gap]]
 
@@ -752,6 +741,6 @@ def fitnessSharingBreederSelection(p_size,
         population = np.concatenate((population, children))
 
         if display_fun != None:
-            display_fun("Round " + str(g) + " - Fitness " + str(best_fitness))
+            display_fun("Round " + str(g) + " - Accuracy: " + str(accuracy) + " Recall: " + str(recall))
 
-    return best_performer, population, history
+    return population, history
