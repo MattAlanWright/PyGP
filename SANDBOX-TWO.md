@@ -1,9 +1,5 @@
 # Fitness Sharing
 
-Matthew Wright
-
-B00529448
-
 
 
 ## Introduction and Purpose
@@ -18,11 +14,11 @@ This experiment looks at the results of two different dataset sampling methods: 
 
 ### Fitness Sharing
 
-One possible, and simple, measure of the fitness of a GP instance is the number of exemplars it classifies correctly. This is effectively the accuracy un-normalized by the total number of exemplars. If an outcome matrix $G$, defined as
+One possible, and simple, measure of the fitness of a GP instance is the number of exemplars it classifies correctly. This is effectively the accuracy un-normalized by the total number of exemplars. If an outcome matrix $G$, defined as:
 
 ​                                      $G(m_i, p_k) = $ 1 IF program $m_i$ correctly classifies exemplar $p_k$ ELSE 0
 
-is constructed at each generation, where $p_k$ is an exemplar in the subset, then the fitness of each program can be measured as
+is constructed at each generation, where $p_k$ is an exemplar in the subset, then the fitness of each program can be measured as:
 
 ​                                                                                   $f_i = \sum_{k} G(m_i, p_k)$
 
