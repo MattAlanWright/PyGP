@@ -92,7 +92,7 @@ All four combinations of uniform sampling vs balanced sampling and standard fitn
 
 ### Top-Performer Metrics
 
-####Shuttle Statlog Dataset
+#### Shuttle Statlog Dataset
 
 The final accuracy and detection rates for the shuttle statlog dataset are shown below. These are the median results for the five top performers from all five evolutionary runs under a given configuration. For example, under no fitness sharing and uniform sampling, the accuracies below were collected by taking the top performer from each of the five evolution runs under this configuration, evaluating their accuracy on the training and test set and taking the median result. Note that the majority class in this dataset makes up approximately 80% of the dataset.
 
@@ -110,6 +110,7 @@ The final accuracy and detection rates for the shuttle statlog dataset are shown
 | Sharing          | Class-balanced  | Test    | 71.59        |
 
 **Detection Rate**
+
 | Fitness Paradigm | Sampling Method | Dataset | Detection Rate |
 | ---------------- | --------------- | ------- | -------------- |
 | No sharing       | Uniform         | Train   | 0.404          |
@@ -129,7 +130,7 @@ It is also noteworthy that for both uniform sampling and class-balanced sampling
 
 The results for detection rate on this dataset are particularly interesting in that, both for uniform sampling and class-balanced sampling, the detection rate also decreased when fitness sharing was applied. This is surprising given that fitness sharing is intended to prevent GP from leveraging class imbalance and create more balanced classifiers. The biggest factor in class balance when measured by detection rate appears to be balanced class sampling, which strongly encourages higher detection rates.
 
-####Thyroid Dataset
+#### Thyroid Dataset
 
 The final accuracy and detection rates for the thyroid dataset are shown below. Note that the majority class in this dataset makes up approximately 92% of the dataset.
 
