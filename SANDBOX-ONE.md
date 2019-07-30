@@ -14,7 +14,7 @@ As mentioned, both tournament- and breeder-style evolution and selection algorit
 
 Since the implementation is described in the assignment, this section will be restricted to specifics not implied by the assignment description. The genetic program was implemented entirely in Python. The genetic program itself is implemented as a class, *Program* and the experiments are performed and recorded in individual Jupyter notebooks. The implementation and notebooks are viewable at <https://github.com/MattAlanWright/PyGP>. A branch, *sandbox-1*, also contains the same results (and this write-up) and has been created to prevent future updates from destroying old information. The genetic program class as well as the evolution algorithms are implemented in *GeneticProgram.py* and the experiments are each contained in individual, descriptively-named notebooks (viewable directly on GitHub).
 
-####Instructions, Mutation and Crossover
+#### Instructions, Mutation and Crossover
 
 Instructions are recorded as nested lists: individual instructions are a list of integers representing the mode, target, operation and source, as described in the assignment, and each program maintains a list of these lists. Mutation and crossover are implemented as class methods and are independent of the style of evolution (breeder or tournament). Each instance of a *Program* is instantiated with a mutation rate (a floating point value between 0.0 and 1.0). Mutation is implemented as follows:
 
@@ -31,11 +31,11 @@ for each instruction in the program's list of instructions:
 
 Obviously this explanation is very loose. The `MODE`, `TARGET`, `OP` and `SOURCE` values are integers indexing into the instruction and `MAX_COMPONENT_VALUE` is an integer between 0 and the maximum sensible value for whatever component is being mutated. Crossover is implemented as two-point crossover, exactly as described in class with a fixed crossover rate of 90% (ie. 90% of the time, crossover takes place).
 
-### Evolution Algorithms (Selection and Variance Operations)
+### Evolution Algorithms (Selection and Variation Operations)
 
 Both the tournament and breeder selection algorithms are implemented exactly as described in the assignment handout and so are only briefly touched on here. One notable decision that was left ambiguous in the assignment description is that when competitiors are chosen (four at a time) in tournaments and parents are chosen (two at a time) in breeder generations, these selections are done *without* replacement so that no two competitors or parents are ever the same individual.
 
-###Execution and Prediction
+### Execution and Prediction
 
 Each *Program* instance has a list of 8 floating point values, used to represent the machine registers available to each program. These are zero-ed out before executing instructions.
 
@@ -45,7 +45,7 @@ After executing a program, predictions are defined to be the value in either reg
 
 One significant deviation from typical GP that must be noted is the implementation of fitness evaluation. GP often implements fitness as a unitless scalar which measures the "goodness" of an individual. It has no inherent meaning but rather has relevance compared to the fitness of other individuals, with higher fitness being better. This implementation, however, takes its cues from standard machine learning classifier implementations and uses sigmoid (and softmax) smoothing operators on the output register(s) and cross-entropy error calculation. In this scenario, fitness is still unitless but is better referred to as "error" and lower is better. **Note that in the source code it is still named fitness. This is a potential source of confusion for anyone reading a less-than operator when they may expect a greater-than operator.**
 
-###Data Splitting
+### Data Splitting
 
 For each dataset in both tournament and breeder evolution, the datatset was split into two portions: 80% was used for training and 20% used for testing. Before performing the split, each datatset was randomly shuffled to ensure that both portions maintained roughly the same class ratios as the entire dataset. This was performed with the *train_test_split* function from Sklearn's open-source *preprocessing* module (<https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html>).
 
@@ -92,7 +92,7 @@ For each of the five runs at a given mutation rate, the best-so-far error value 
 
 The hypothesis is that higher mutation rates will lead to steeper declines in error in the early stages of convergence (ie. will support exploration) and smaller mutation rates will aid optimization in the latter stage of convergence (ie. support exploitation). No assumption is made about final accuracy values.
 
-###Breeder-Style Evolution
+### Breeder-Style Evolution
 
 For breeder-style evolution, the gap percent (the percentage of individuals in the population killed off and replaced at each generation) was set to two different values, 30% and 70%, with the intention of viewing the difference in convergence behaviour between the case where a minority of the population is replaced and the case where a majority of the population is replaced. In each case, three runs of breeder-style evolution were carried out with the following parameters:
 
@@ -122,7 +122,7 @@ The failure to achive a high accuracy on this dataset was the direct reason for 
 
 ### Tournament-style Evolution and Mutation Rate
 
-####Convergence Behaviour
+#### Convergence Behaviour
 
 The plots below show the comparison of convergence behaviour among the best-performing individuals from each five runs using a particular mutation rate for all three datasets.
 
@@ -159,7 +159,7 @@ For the iris dataset, these results show that a lower mutation rate may result i
 
 ### Breeder-style Evolution and Gap Percent
 
-####Convergence Behaviour
+#### Convergence Behaviour
 
 The plots below show the comparison of convergence behaviour among the best-performing individuals from each three runs using a particular gap percent for each run of evolution.
 
